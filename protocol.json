@@ -1,0 +1,80 @@
+LOGIN
+{
+  'msg_id': 0,
+  'user': user,
+  'pass': pwd
+}
+
+LOGOUT
+{
+  'msg_id': 0,
+  'user': user,
+  'pass': pwd
+}
+
+REGISTER CATEGORY
+{
+  'msg_id': 1,
+  'category': cat_name
+}
+
+LIST CATEGORIES
+{
+  'msg_id': 10,
+}
+
+SEARCH CATEGORIES
+{
+  'msg_id': 11,
+  'category': ''
+}
+
+ADD PRODUCT
+{
+  'msg_id': 2,
+  'category': cat_name,
+  'product': prod_name,
+  'price': price
+}
+
+LIST PRODUCT
+{
+  'msg_id': 20
+  'category': [cat_name]
+}
+
+SEARCH PRODUCTS
+{
+  'msg_id': 21
+  'category': [cat_name]
+  'product': [search_terms]
+}
+
+BID PRODUCT
+{
+    'msg_id': 3,
+    'category': cat_name,
+    'product': prod_name,
+    'price': price
+}
+
+REGISTER NOTIFICATION ENDPOINT
+{
+    'msg_id': 4,
+    'host': host,
+    'port': port,
+}
+
+RESPONSE
+{
+    'msg_id': -1,
+    'response': [msg_id],
+    'code': res_code
+}
+
+NOTIFICATION
+{
+    'msg_id': 40,
+    'notif_code': [code],
+    'notif_msg': [text],
+}
