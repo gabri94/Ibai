@@ -1,35 +1,45 @@
-from category import Category
-from auction import Auction
-import json
-import threading
 import hmac
-import time
-from threading import Lock
-import uuid
-from ibai_exceptions import *
-from utils import error_print, debug_print
+import json
 import socket
+import threading
+import time
+
+from model.category import Category
+from model.ibai_exceptions import *
+from model.auction import Auction
+
+from utils import error_print, debug_print
 
 
-def synchronized(lock):
-    """ Synchronization decorator. """
-    def wrap(f):
-        def newFunction(*args, **kw):
-            lock.acquire()
+def synchronized(l):
+    """Synchronizer decorator
+    :param l: lock variable
+    :return: function decorated with lock
+    """
+    def wrap(funct):
+        def LockedFunction(*args, **kw):
+            l.acquire()
             try:
-                return f(*args, **kw)
+                return funct(*args, **kw)
             finally:
-                lock.release()
-        return newFunction
+                l.release()
+        return LockedFunction
     return wrap
 
-
-myLock = Lock()
+myLock = threading.Lock()
 
 
 class ClientManager(threading.Thread):
+    """
+    This class manage the communication with the single client
+    """
 
     def __init__(self, cs, address, auct):
+        """Initalize the Client Manager
+        :param cs: client socket
+        :param address: remote address
+        :param auct: reference to the auction object
+        """
         threading.Thread.__init__(self)
         self._address = address
         self._cs = cs
@@ -38,6 +48,9 @@ class ClientManager(threading.Thread):
         self.user = None
 
     def run(self):
+        """Main loop of the Thread, here listens for the client msgs
+        :return: return when the connnection closes
+        """
         self.go = True
         while(self.go):
             try:
@@ -54,6 +67,10 @@ class ClientManager(threading.Thread):
         self._cs.close()
 
     def read_command(self, line):
+        """Read a message received by socket and perform the right command
+        :param line: line read on the socket
+        :return: return when it has been executed
+        """
         json_d = json.loads(line)
         if json_d['msg_id'] == 11:  # Login
             self.login(json_d['user'], json_d['pass'])
@@ -95,7 +112,7 @@ class ClientManager(threading.Thread):
         try:
             if(not session['token']):
                 raise SessionException("Errore, sessione non esistente")
-            session = json.loads(session['token'])
+            session = session['token']
         except (KeyError, TypeError, SessionException) as e:
             self.response(3, str(e))
             return False
@@ -115,6 +132,9 @@ class ClientManager(threading.Thread):
             return False
 
     def gen_session(self):
+        """Generate the session tocken for the logged user
+        :return: json session token
+        """
         now = time.time()
         # add 24h to the current time 60*60*24
         expire = str(int(now + 86400))
@@ -122,9 +142,14 @@ class ClientManager(threading.Thread):
         mac.update(self.user.name)
         mac.update(expire)
         session = {"username": self.user.name, "expire": expire, "token": mac.hexdigest()}
-        return json.dumps(session)
+        return session
 
     def login(self, user, pwd):
+        """
+        Log a user on the server
+        :param user: username
+        :param pwd: MD5 hash of the password
+        """
         username = user.lower()
         try:
             self.user = self._auct._users[username]
@@ -139,6 +164,9 @@ class ClientManager(threading.Thread):
     # TODO: Da ricontrollare tutta la funzione
     @synchronized(myLock)
     def register(self, cat_name):
+        """Register a new category
+        :param cat_name: category name
+        """
         if not cat_name:
             self.response(0, res_msg="Invalid category name")
             return
@@ -160,14 +188,16 @@ class ClientManager(threading.Thread):
 
     @synchronized(myLock)
     def sell(self, cat_name, prod_name, price):
+        """ Add a new product on the server
+        :param cat_name: category name
+        :param prod_name: product name
+        :param price: base price for the auction
+        """
         try:
             cat = Category.search_category(self._auct._categories, cat_name)
             a = Auction(prod_name, int(price), self.user)
             cat.add_auction(a)
             self.response(1)
-        except KeyError, e:
-            error_print("Categoria non trovata")
-            self.response(4, "Categoria non trovata")
         except CategoryException, e:
             debug_print(e)
             self.response(0, res_msg=str(e))
@@ -176,12 +206,17 @@ class ClientManager(threading.Thread):
 
     @synchronized(myLock)
     def buy(self, cat_name, prod_name, price):
+        """ Place a bid on a product
+        :param cat_name: category name
+        :param prod_name: product name
+        :param price: value of the bid
+        """
         try:
             cat = Category.search_category(self._auct._categories, cat_name)
             auct = cat.search_auction(prod_name)
             auct.bid(price=price, user=self.user)
             self.response(1)
-        except AuctionException, e:
+        except UserException, e:
             self.response(5, res_msg=str(e))
         except CategoryException, e:
             debug_print(e)
@@ -191,14 +226,15 @@ class ClientManager(threading.Thread):
 
     @synchronized(myLock)
     def unbuy(self, cat_name, prod_name):
+        """ Remove our last offer only if it's the highest
+        :param cat_name: category name
+        :param prod_name: product name
+        """
         try:
             cat = Category.search_category(self._auct._categories, cat_name)
             auct = cat.search_auction(prod_name)
             auct.unbid(self.user)
             self.response(1)
-        except KeyError, e:
-            debug_print("Categoria non trovata")
-            self.response(-1)
         except CategoryException, e:
             debug_print(e)
             self.response(0)
@@ -208,37 +244,29 @@ class ClientManager(threading.Thread):
 
     @synchronized(myLock)
     def close_bid(self, cat_name, prod_name):
+        """ Close a bid
+        :param cat_name: category name
+        :param prod_name: product name
+        """
         try:
             cat = Category.search_category(self._auct._categories, cat_name)
             auct = cat.search_auction(prod_name)
             auct.close(self.user)
             self.response(1)
-        except KeyError, e:
-            debug_print("Categoria non trovata")
-            self.response(-1)
         except CategoryException, e:
+            # Not matching category
             debug_print(e)
             self.response(0)
         except AuctionException, e:
-            debug_print(e)
-            self.response(3)
+            # No Winner or no auction #TODO fix
+            self.response(6)
 
-    def find_auct(cat_name, prod_name):
-        try:
-            cat = Category.search_category(self._auct._categories, cat_name)
-            return cat.search_auction(prod_name)
-        except KeyError, e:
-            debug_print("Categoria non trovata")
-            self.response(-1)
-        except CategoryException, e:
-            debug_print(e)
-            self.response(0)
-        except AuctionException, e:
-            debug_print(e)
-            self.response(3)
-
-
-    def response(self, response, res_msg=False, token=False):
+    def response(self, response, res_msg="", token={}):
+        """Compose a generic response
+        :param response: response code
+        :param res_msg: response message
+        :param token: optional, token of the session
+        """
         payload = {
             'msg_id': -1,
             'response': response,
@@ -247,5 +275,5 @@ class ClientManager(threading.Thread):
             payload['res_msg'] = res_msg
         if(token):
             payload['token'] = token
-        json_d = json.dumps(payload)
+        json_d = json.dumps(payload) + "\r\n"
         self._cs.send(json_d)

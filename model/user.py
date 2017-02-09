@@ -4,6 +4,11 @@ import json
 
 class User:
     def __init__(self, name, pwd, date):
+        """Create a new User
+        :param name: Unique username of the user
+        :param pwd: MD5 hash of the password
+        :param date: registration date
+        """
         self.name = name
         self.password = pwd
         self.date = date
@@ -11,10 +16,19 @@ class User:
         self.port = 0
 
     def update_notif_socket(self, hostname, port):
+        """Update the client remote host for the notifications
+        :param hostname: hostname of the client
+        :param port: port for the notifications on the client
+        :return:
+        """
         self.remote_host = hostname
         self.remote_port = port
 
     def notify(self, code, msg):
+        """Notify the user
+        :param code: notification code
+        :param msg: notification message
+        """
         self.notif_sock = socket.socket()
         self.notif_sock.connect((self.remote_host, self.remote_port))
         payload = {
