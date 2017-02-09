@@ -1,0 +1,305 @@
+\section{Protocollo}
+Per sviluppare questo progetto era necessario definire un protocollo per la comunicazione client-server.
+Per garantire  la scalabilità del sistema è stato scelto un protocollo stateless, nonchè connectionless.\\
+E' stato utlizzato JSON come formato per lo scambio di dati in quanto erano disponibili nella libreria standard python i metodi per serializzare e deserializzare gli oggetti.\\
+
+Il formato di un generico  messaggio è:
+\begin{lstlisting}[language=json]
+{
+  "msg_id": <id>
+}
+\end{lstlisting}
+La prima cifra del campo msg\_id indica il tipo di richiesta, la seconda indica il metodo
+\begin{itemize}
+\item -1: Messaggio di risposta a un comando
+\item 1: Autenticazione
+\begin{itemize}
+\item 11: Log in
+\item 12: Log out
+\end{itemize}
+\item 2: Notifiche
+\begin{itemize}
+\item 21: Registra l'endpoint per le notifiche
+\item 22: Messaggio di notifica
+\end{itemize}
+\item 3: Categorie
+\begin{itemize}
+\item 31: Registra nuova categoria
+\item 32: Ricerca di una categoria
+\item 33: Lista tutte le categorie
+\end{itemize}
+\item 4: Prodotti
+\begin{itemize}
+\item 41: Registra un nuovo prodotto
+\item 42: Ricerca un prodotto
+\item 43: Lista tutti i prodotti
+\end{itemize}
+\item 5: Asta
+\begin{itemize}
+\item 51: Fai un offerta
+\item 52: Cancella la tua ultima offerta
+\item 53: Chiudi l'asta
+
+\end{itemize}
+
+\end{itemize}
+
+\subsection{Messaggio di risposta}
+Il formato di un generico messaggio di risposta è il seguente.\\
+Se non è esplicitamente indicato un'altro formato per la risposta,
+ allora la risposta sarà di questo formato.
+\begin{lstlisting}[language=json]
+{
+  "msg_id": -1
+  "response" : <code>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+response & int & '1' in caso di successo  \\
+& & '-1' comando non sia valido \\
+& & '0' errore \\
+& & '2' sessione scaduta \\
+& & '3' sessione non valida \\ \hline
+\end{tabular}\\
+Questo messaggio può essere esteso dalle varie funzioni aggiungendo campi e codici di risposta.\\
+
+\subsection{Autenticazione}
+La prima cosa che deve fare un client quando si connette al server è autenticarsi utilizzando un username ed una password.
+Il server mantiene una lista di utenti con relative password, quando il client prova ad autenticarsi vengono confrontati e se sono corretti l'autenticazione è avvenuta.
+Per evitare che nel server vengano memorizzate le password in chiaro, è stato scelto di memorizzare e trasmettere l'hash md5 della password.
+Il Client si occuperà di eseguire l'hash md5 della password inserita dall'utente e di inviarlo al server, che lo confronterà con quello memorizzato.\\
+
+\subsubsection{Sessioni}
+Per gestire le sessioni  mantenendo un procollo stateless è stato scelto di generare un token ed inviarlo al client.
+Una volta effettuato il login il server restituirà un token al client che verrà utilizzato per autenticare tutti i comandi.\\
+Il token inviato al client è della forma:
+\begin{lstlisting}[language=json]
+{
+  "username" : <user>
+  "expiration": <expiration>
+  "signature": <signed proof of autenticity>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l|}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+username & stringa & Username dell'utente \\ \hline
+expiration & int & Data e ora di scadenza della sessione (in secondi) \\ \hline
+signature & stringa & Codice di verifica del messaggio\\ \hline
+\end{tabular}\\
+
+Il campo signature è un hash dei precedenti due campi (username e expiration) più una chiave segreta generata dal server.
+In questa maniera il server potrà verificare che il token sia autentico senza doverne mantenere una copia in memoria.
+\subsubsection{Formato}
+Il messaggio di autenticazione è del formato:
+\begin{lstlisting}[language=json]
+{
+  "msg_id": 11,
+  "user": <username>,
+  "pass": <hash of pwd>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+user & stringa & Username dell'utente \\ \hline
+pass & stringa & Hash MD5 della password \\ \hline
+\end{tabular} \\
+\vspace*{1em}
+
+La risposta è del formato:
+\begin{lstlisting}[language=json]
+{
+  "msg_id": -1,
+  "response": <code>
+  "token": <token>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+response & int & codice di risposta  \\ \hline
+token & json & token per la sessione \\ \hline
+\end{tabular} \\
+\subsection{Gestione delle Notifiche}
+Il server di aste può inviare delle notifiche asincrone ai client per comunicare aggiornamenti di stato.
+Per esempio il client riceverà una notifica quando un'asta viene terminata o la sua offerta viene superata.\\
+\subsubsection{Registrazione}
+Per ricevere delle notifiche asincrone il client dovrà stare in ascolto su una determinata porta, e dovrà comunicare il proprio indirizzo e la porta al server. Per fare questo è disponibile un comando. Di seguito il formato:\\
+\begin{lstlisting}[language=json]
+{
+  "token": <token>,
+  "msg_id": 21,
+  "host": <hostname>,
+  "port": <port>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+token & json & Token per la sessione \\ \hline
+host & string & Hostname del client  \\ \hline
+port & int & Porta alla quale il client riceve le notifiche  \\ \hline
+\end{tabular} \\
+\subsubsection{Messaggi di notifica}
+Un messaggio di notiica, inviato dal server al client, rispetta il formato:
+\begin{lstlisting}[language=json]
+{
+  "msg_id": 22,
+  "code": <notification code>,
+  "text": <human readable meaning>
+}
+\end{lstlisting}
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+code & int & codice di notifica \\
+& & -1 Notifiche OK \\ \hline
+& & 1 Asta chiusa\\
+& & 2 Hai vinto\\ \hline
+text & string & Messaggio di notifica \\ \hline
+\end{tabular} \\
+
+
+\subsection{Categorie}
+I prodotti in vendita nel sistema di aste sono suddivisi per categorie merceologiche. E' possibile effettuare varie operazioni sulle cateogorie:
+Ogni categoria è identificata in maniera univoca dal suo nome.
+\subsubsection{Registrazione categoria}
+Attraverso il seguente comando è possibile aggiungere una nuova categoria\\
+Il nome della categoria sarà utilizzato per identificarla.
+
+\begin{lstlisting}[language=json]
+{
+  "token": <token>,
+  "msg_id": 31,
+  "category": <category name>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & Nome della categoria, univoco.\\ \hline
+\end{tabular} \\
+\subsubsection{Lista delle categorie}
+Attraverso il seguente comando è possibile ottenere una lista delle categorie
+\begin{lstlisting}[language=json]
+{
+  "token": <token>,
+  "msg_id": 33
+}
+\end{lstlisting}
+
+Il formato della risposta è:
+\begin{lstlisting}[language=json]
+{
+  "msg_id": -1,
+  "response": <code>
+  "categories":
+  [
+    <category1>,
+    <category2>
+  ]
+}
+\end{lstlisting}
+\subsubsection{Ricerca di una categoria}
+Attraverso il seguente comando è possibile ricercare tra le categorie per nome
+\begin{lstlisting}[language=json]
+{
+  "token": <token>,
+  "msg_id": 32,
+  "category": <category name>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & Espressione da ricercare.\\ \hline
+\end{tabular} \\
+
+Il formato della risposta è lo stesso del precedente comando.
+\subsection{Prodotti}
+All'interno delle categorie merceologiche sono presenti i prodotti. E' possibile aggiungere nuovi prodotti, ricercare i prodotti per nome o visualizzarli tutti.
+\subsubsection{Registra un nuovo prodotto}
+Il seguente comando aggiunge una nuova asta per il determinato prodotto.
+\begin{lstlisting}[language=json]
+{
+  "token": <token>,
+  "msg_id": 41,
+  "category": <cat_name>,
+  "product": <prod_name>,
+  "price": <price>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & categoria alla quale appartiene il prodotto. \\ \hline
+product & string & nome del prodotto (univoco per categoria).\\ \hline
+price & float & prezzo di partenza dell'asta.\\ \hline
+\end{tabular} \\
+
+\subsubsection{Ricerca di un prodotto}
+Attraverso questo comando è possibile ricercare un prodotto all'interno di una categoria.
+\begin{lstlisting}[language=json]
+{
+  "token": <token>,
+  "msg_id": 42,
+  "category": <category name>
+  "product": <product name>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & Categoria alla quale appartiene il prodotto. \\ \hline
+product & strin & Espressione da ricercare come nome del prodotto.\\ \hline
+\end{tabular} \\
+\subsubsection{Lista tutti i prodotti}
+\begin{lstlisting}[language=json]
+{
+  "token": <token>,
+  "msg_id": 43,
+  "category": <category name>
+}
+\end{lstlisting}
+
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & categoria  della quale si vuole la lista di prodotti. \\ \hline
+\end{tabular} \\
+\subsubsection{Messaggio di risposta}
+La risposta del server eredita il formato base, introducendo un nuovo codice di risposta:\\
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+response & int & '4' categoria non esistente \\ \hline
+\end{tabular} \\
+
+
+\subsection{Asta}
+Una volta che i prodotti sono stati inseriti i vari utenti posso partecipare ad un asta offrendo un prezzo per l'oggeto.\\
+L'asta termina quando si raggiunge il tempo limite, o quando il venditore decide di chiduerla. In entrambi i casi i partecipanti verranno notificati
+E' anche possibile ritirare un offerta, ma solo nel caso sia l'offerta più alta.
+\subsubsection{Offerta}
+\subsubsection{Ritiro di un offerta}
+\subsubsection{Chiusura di un'asta}
+\begin{lstlisting}[language=json]
+{
+  'token': s<token>,
+  'msg_id': 53,
+  'category': <category name>,
+  'product': <product name>
+}
+\end{lstlisting}
