@@ -2,110 +2,147 @@ from category import Category
 from auction import Auction
 import json
 import threading
+import hmac
+import time
 from threading import Lock
+import uuid
+from ibai_exceptions import *
+from utils import error_print, debug_print
 import socket
 
 
 def synchronized(lock):
     """ Synchronization decorator. """
-
     def wrap(f):
         def newFunction(*args, **kw):
-            if __debug__:
-                print("LOCKING")
             lock.acquire()
-            if __debug__:
-                print("LOCKED")
             try:
                 return f(*args, **kw)
             finally:
-                if __debug__:
-                    print("UNLOCKING")
                 lock.release()
-                if __debug__:
-                    print("UNLOCKED")
         return newFunction
     return wrap
 
 
 myLock = Lock()
 
+
 class ClientManager(threading.Thread):
 
     def __init__(self, cs, address, auct):
         threading.Thread.__init__(self)
-        self._auct = auct
         self._address = address
         self._cs = cs
-        self.notif_sock = socket.socket()
+        self._auct = auct
         self.logged = False
+        self.user = None
 
     def run(self):
-        if __debug__:
-            print("Thread started")
-        go = True
-        while(go):
-            msg = self._cs.recv(1024)
+        self.go = True
+        while(self.go):
+            try:
+                msg = self._cs.recv(1024)
+            except socket.error, se:
+                return
             if msg == "":
-                go = False
+                self.go = False
             else:
-                if __debug__:
-                    print msg
                 msgs = msg.split('\r\n')
                 msgs.pop()  # remove last msg
                 for l in msgs:
-                    go = self.read_command(l)
+                    self.read_command(l)
         self._cs.close()
-        if __debug__:
-            print("Thread stopped")
 
     def read_command(self, line):
         json_d = json.loads(line)
-        if json_d['msg_id'] == 0:  # Login
-            self.login((None, json_d['user'], json_d['pass']))
-            return True
-        if self.logged:
-            if json_d['msg_id'] == 1:  # Register category
-                self.register((None, json_d['category']))
-                return True
-            if json_d['msg_id'] == 2:  # Register auction
-                self.sell((None, json_d['category'], json_d['product'], json_d['price']))
-                return True
-            if json_d['msg_id'] == 3:  # Make a bid
-                self.buy((None, json_d['category'], json_d['product'], json_d['price']))
-                return True
-            if json_d['msg_id'] == 4:  # Register the endpoint for push notif
-                self.notify((None, json_d['host'], json_d['port']))
-                return True
-        return False
+        if json_d['msg_id'] == 11:  # Login
+            self.login(json_d['user'], json_d['pass'])
+            return
+        if json_d['msg_id'] == 12:  # Logout
+            self.go = False
+            return
+        if not self.check_session(json_d):
+            # invalid session
+            return
+        if json_d['msg_id'] == 31:  # Register category
+            self.register(json_d['category'])
+            return
+        if json_d['msg_id'] == 41:  # Register auction
+            self.sell(json_d['category'], json_d['product'], json_d['price'])
+            return
+        if json_d['msg_id'] == 51:  # Make a bid
+            self.buy(json_d['category'], json_d['product'], json_d['price'])
+            return
+        if json_d['msg_id'] == 52:  # Remove last bid
+            self.unbuy(json_d['category'], json_d['product'])
+            return
+        if json_d['msg_id'] == 53:  # Remove last bid
+            self.close_bid(json_d['category'], json_d['product'])
+            return
+        if json_d['msg_id'] == 21:  # Register the endpoint for push notif
+            self.user.update_notif_socket(json_d['host'], json_d['port'])
+            try:
+                self.user.notify(1, "Notifiche attivate")
+                self.response(1, "Notifiche ok")
+            except Exception, e:
+                self.response(0, "Erorre connessione notifiche")
+            return
+        self.response(-1, "Comando non valido")
+        return
 
-    def login(self, args):
-        username = args[1].lower()
+    # TODO: CHECK
+    def check_session(self, session):
         try:
-            u = self._auct._users[username]
-            if u['pwd'] == args[2]:
-                # Login effettuato
-                self.logged = True
-                self.response(0, 1)
-                return True
-        except KeyError, e:
-            print "Utente non trovato"
-        self.response(0, 0)
-        return False
-
-    def notify(self, args):
-        self.remote_host = args[1]
-        self.remote_port = args[2]
-        if self.notification(11, 'Notification Connected'):
-            self.response(4, 1)
+            if(not session['token']):
+                raise SessionException("Errore, sessione non esistente")
+            session = json.loads(session['token'])
+        except (KeyError, TypeError, SessionException) as e:
+            self.response(3, str(e))
+            return False
+        # check if the session is expired
+        if(int(session['expire']) - time.time() < 0):
+            self.response(2, "Errore, sessione scaduta")
+            return False
+        server_mac = hmac.new(self._auct._key)
+        server_mac.update(session['username'])
+        server_mac.update(session['expire'])
+        # check if the session token is valid
+        if(hmac.compare_digest(server_mac.hexdigest(), str(session['token']))):
             return True
         else:
-            self.response(4, 0)
+            self.response(3, "Errore, sessione non valida")
+            print "UNAUTHORIZED"
             return False
 
+    def gen_session(self):
+        now = time.time()
+        # add 24h to the current time 60*60*24
+        expire = str(int(now + 86400))
+        mac = hmac.new(self._auct._key)
+        mac.update(self.user.name)
+        mac.update(expire)
+        session = {"username": self.user.name, "expire": expire, "token": mac.hexdigest()}
+        return json.dumps(session)
+
+    def login(self, user, pwd):
+        username = user.lower()
+        try:
+            self.user = self._auct._users[username]
+            if self.user.password == pwd:
+                # Login effettuato
+                self.logged = True
+                self.response(1, token=self.gen_session())
+        except KeyError, e:
+            error_print("Utente non trovato")
+            self.response(0, "Utente non trovato")
+
+    # TODO: Da ricontrollare tutta la funzione
     @synchronized(myLock)
-    def register(self, args):
-        cat_name = args[1].lower()
+    def register(self, cat_name):
+        if not cat_name:
+            self.response(0, res_msg="Invalid category name")
+            return
+        cat_name = cat_name.lower()
         try:
             c = self._auct._categories[cat_name]
             raise Exception("Categoria gia' esistente")
@@ -113,82 +150,102 @@ class ClientManager(threading.Thread):
             try:
                 self._auct._categories[cat_name] = Category(cat_name)
             except Exception, e:
-                print "Errore: " + str(e)
-                self.response(1, 0)
+                error_print(e)
+                self.response(0, "Categoria non esistente")
             else:
-                self.response(1, 1)
+                self.response(1)
         except Exception, e:
-            self.response(1, 0)
-            print "Errore: " + str(e)
+            self.response(0)
+            error_print(e)
 
     @synchronized(myLock)
-    def sell(self, args):
+    def sell(self, cat_name, prod_name, price):
         try:
-            cat = Category.search_category(self._auct._categories, args[1])
-            if not cat:
-                raise Exception("Category not found")
-            a = Auction(args[2], int(args[3]))
+            cat = Category.search_category(self._auct._categories, cat_name)
+            a = Auction(prod_name, int(price), self.user)
             cat.add_auction(a)
-            self.response(2, 1)
+            self.response(1)
         except KeyError, e:
-            print "Categoria non trovata"
-            self.response(2, -1)
-        except Exception, e:
-            print "Errore" + str(e)
-            self.response(2, 0)
+            error_print("Categoria non trovata")
+            self.response(4, "Categoria non trovata")
+        except CategoryException, e:
+            debug_print(e)
+            self.response(0, res_msg=str(e))
+        except AuctionException, e:
+            self.response(3, res_msg=str(e))
 
     @synchronized(myLock)
-    def buy(self, args):
+    def buy(self, cat_name, prod_name, price):
         try:
-            cat = Category.search_category(self._auct._categories, args[1])
-            if not cat:
-                raise Exception("Category not found")
-            auct = cat.search_auction(args[2])
-            if not auct:
-                raise Exception("Auction not found")
-            auct.bid(args[3])
-            self.response(3, 1)
+            cat = Category.search_category(self._auct._categories, cat_name)
+            auct = cat.search_auction(prod_name)
+            auct.bid(price=price, user=self.user)
+            self.response(1)
+        except AuctionException, e:
+            self.response(5, res_msg=str(e))
+        except CategoryException, e:
+            debug_print(e)
+            self.response(4, res_msg="Category not found")
+        except ExistingAuctionException, e:
+            self.response(5, res_msg="Auction not found")
+
+    @synchronized(myLock)
+    def unbuy(self, cat_name, prod_name):
+        try:
+            cat = Category.search_category(self._auct._categories, cat_name)
+            auct = cat.search_auction(prod_name)
+            auct.unbid(self.user)
+            self.response(1)
         except KeyError, e:
-            print "Categoria non trovata"
-            self.response(3, -1)
-        except Exception, e:
-            if __debug__:
-                print "Errore: " + str(e)
-            self.response(3, 0)
+            debug_print("Categoria non trovata")
+            self.response(-1)
+        except CategoryException, e:
+            debug_print(e)
+            self.response(0)
+        except AuctionException, e:
+            debug_print(e)
+            self.response(3)
 
-    def error(self, id):
-        print("Error : " + str(id))
-
-    def notification(self, code, msg):
+    @synchronized(myLock)
+    def close_bid(self, cat_name, prod_name):
         try:
-            if __debug__:
-                print("Connecting to notif sock")
-            self.notif_sock.connect((self.remote_host, self.remote_port))
-            payload = {
-                'msg_id': 40,
-                'notif_code': code,
-                'notif_msg': msg
-            }
-            json_d = json.dumps(payload)
-            if __debug__:
-                print("Sending to notif sock")
-            self.notif_sock.send(json_d)
-            self.notif_sock.close()
-            if __debug__:
-                print("Closed socket")
-            return True
-        except Exception, e:
-            if __debug__:
-                print "Errore: " + str(e)
-            return False
+            cat = Category.search_category(self._auct._categories, cat_name)
+            auct = cat.search_auction(prod_name)
+            auct.close(self.user)
+            self.response(1)
+        except KeyError, e:
+            debug_print("Categoria non trovata")
+            self.response(-1)
+        except CategoryException, e:
+            debug_print(e)
+            self.response(0)
+        except AuctionException, e:
+            debug_print(e)
+            self.response(3)
 
-    def response(self, res_id, res_code, res_msg=False):
+    def find_auct(cat_name, prod_name):
+        try:
+            cat = Category.search_category(self._auct._categories, cat_name)
+            return cat.search_auction(prod_name)
+        except KeyError, e:
+            debug_print("Categoria non trovata")
+            self.response(-1)
+        except CategoryException, e:
+            debug_print(e)
+            self.response(0)
+        except AuctionException, e:
+            debug_print(e)
+            self.response(3)
+
+
+    def response(self, response, res_msg=False, token=False):
         payload = {
             'msg_id': -1,
-            'response': res_id,
-            'code': res_code
+            'response': response,
         }
         if(res_msg):
             payload['res_msg'] = res_msg
+        if(token):
+            payload['token'] = token
         json_d = json.dumps(payload)
         self._cs.send(json_d)

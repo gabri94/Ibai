@@ -2,6 +2,7 @@ import socket
 import hashlib
 import json
 import threading
+import Queue
 from time import sleep
 
 
@@ -12,42 +13,35 @@ class IbaiClient:
         self._notify_hostname = hostname
         self._serverSocket.bind((hostname, 0))
         self._notify_port = self._serverSocket.getsockname()[1]
-        self.notifications = []
-
-    def stop_notify_worker(self):
-        print("Killing Worker")
-        self.notify_run = False
-        self._nthread.join()
-        print("Killed Worker")
+        self._token = ""
+        self.notifications = Queue.Queue()
 
     def notify_worker(self):
         self.notify_run = True
         self._serverSocket.listen(1)
         while self.notify_run:
-            print("Pre_accept")
             (clientsocket, address) = self._serverSocket.accept()
-            print("Pre_receive")
             msg = clientsocket.recv(1024)
-            print("Post_receive")
             if msg == "":
                 self.notify_run = False
             else:
-                if __debug__:
-                    print msg
                 msgs = msg.split('\r\n')
                 for l in msgs:
                     json_d = json.loads(l)
-                    print("NW2")
-                    if json_d['msg_id'] == 40:  # Notify
-                        print("NW3")
-                        self.notifications.append(json_d)
+                    if json_d['msg_id'] == 22:  # Notify
+                        if(json_d['code'] == -1):
+                            self.notify_run = False
+                        else:
+                            self.notifications.put(json_d)
                     else:
                         self.notify_run = False
+                clientsocket.close()
         self._serverSocket.close()
+        return
 
     def listen_notify(self, host, port):
         self._nthread = threading.Thread(target=self.notify_worker)
-        self._nthread.isDaemon = True
+        self._nthread.daemon = True
         self._nthread.start()
 
     def connect(self, address, port):
@@ -57,26 +51,21 @@ class IbaiClient:
 
     def disconnect(self):
         self.sock.close()
+        self._serverSocket.close()
         return True
 
     def send(self, data):
         json_d = json.dumps(data) + "\r\n"
-        if __debug__:
-            print json_d
         self.sock.send(json_d)
 
-    def eval_res(self, res_id):
+    def eval_res(self, opcode):
         resp = self.sock.recv(1024)
-        if __debug__:
-            print resp
-            print res_id
         resp = resp.split("\r\n")
         json_resp = json.loads(resp[0])
         if json_resp['msg_id'] == -1:
-            if json_resp['response'] == res_id:
-                return json_resp['code']
-            else:
-                raise Exception("Not a Response")
+            if opcode == 11:
+                self._token = json_resp['token']
+            return json_resp['response']
         else:
             raise Exception("Not a Response")
 
@@ -84,16 +73,18 @@ class IbaiClient:
         pwd = hashlib.md5(password).hexdigest()
         user = user.lower()
         data = {
-            'msg_id': 0,
+            'msg_id': 11,
             'user': user,
             'pass': pwd
         }
         self.send(data)
-        return self.eval_res(data['msg_id'])
+        self.res = self.eval_res(data['msg_id'])
+        return self.res
 
     def register(self, cat_name):
         data = {
-            'msg_id': 1,
+            'token': self._token,
+            'msg_id': 31,
             'category': cat_name
         }
         self.send(data)
@@ -101,7 +92,8 @@ class IbaiClient:
 
     def sell(self, cat_name, prod_name, price):
         data = {
-            'msg_id': 2,
+            'token': self._token,
+            'msg_id': 41,
             'category': cat_name,
             'product': prod_name,
             'price': price
@@ -111,7 +103,8 @@ class IbaiClient:
 
     def bid(self, cat_name, prod_name, price):
         data = {
-            'msg_id': 3,
+            'token': self._token,
+            'msg_id': 51,
             'category': cat_name,
             'product': prod_name,
             'price': price
@@ -121,14 +114,17 @@ class IbaiClient:
 
     def notify_me(self):
         data = {
-            'msg_id': 4,
+            'token': self._token,
+            'msg_id': 21,
             'host': self._notify_hostname,
             'port': self._notify_port
         }
         self.send(data)
-        response = self.notifications.pop()
-        if response['msg_id'] == 40:
-            if response['notif_code'] == 11:
-                print response['notif_msg']
+        try:
+            response = self.notifications.get(timeout=10)
+        except Queue.Empty:
+            return False
+        if response['msg_id'] == 22:
+            if response['code'] == 1:
                 return True
         return False
