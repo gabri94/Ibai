@@ -161,7 +161,7 @@ Un messaggio di notiica, inviato dal server al client, rispetta il formato:
 \hline
 Campo & Tipo & Descrizione \\ \hline
 code & int & codice di notifica \\
-& & -1 Notifiche OK \\ \hline
+& & -1 Notifiche OK \\
 & & 1 Asta chiusa\\
 & & 2 Hai vinto\\ \hline
 text & string & Messaggio di notifica \\ \hline
@@ -293,7 +293,43 @@ Una volta che i prodotti sono stati inseriti i vari utenti posso partecipare ad 
 L'asta termina quando si raggiunge il tempo limite, o quando il venditore decide di chiduerla. In entrambi i casi i partecipanti verranno notificati
 E' anche possibile ritirare un offerta, ma solo nel caso sia l'offerta più alta.
 \subsubsection{Offerta}
+L'utente può effettuare un offerta per un prodotto già inserito.\\
+L'offerta sarà valida solamente se non è doppia (l'offerta più alta al momento non è dell'utente) al fine di evitare che un utente possa far salire arbitrariamente il prezzo di un prodotto.\\
+Nel caso l'offerta sia inferiore all'ultima offerta registrata allora riceveremo un errore.
+\begin{lstlisting}[language=json]
+{
+  'token': s<token>,
+  'msg_id': 51,
+  'category': <category name>,
+  'product': <product name>
+  'price': <price>
+}
+\end{lstlisting}
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & nome della categoria \\ \hline
+product & string & nome del prodotto \\ \hline
+price & float & valore dell'offerta \\ \hline
+\end{tabular} \\
+
 \subsubsection{Ritiro di un offerta}
+E' possibile ritirare un offerta fatta ad un'asta, ma solo nel caso sia ancora l'offerta più alta.
+\begin{lstlisting}[language=json]
+{
+  'token': s<token>,
+  'msg_id': 52,
+  'category': <category name>,
+  'product': <product name>
+}
+\end{lstlisting}
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & nome della categoria \\ \hline
+product & string & nome del prodotto \\ \hline
+\end{tabular} \\
+
 \subsubsection{Chiusura di un'asta}
 \begin{lstlisting}[language=json]
 {
@@ -303,3 +339,18 @@ E' anche possibile ritirare un offerta, ma solo nel caso sia l'offerta più alta
   'product': <product name>
 }
 \end{lstlisting}
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+category & string & nome della categoria \\ \hline
+product & string & nome del prodotto \\ \hline
+\end{tabular} \\
+\subsubsection{Messaggio di risposta}
+La risposta del server eredita il formato base, introducendo nuovi codici di risposta:\\
+\begin{tabular}{|l | l | l |}
+\hline
+Campo & Tipo & Descrizione \\ \hline
+response & int & '4' categoria non valida \\ \hline
+response & int & '5' asta non valida\\ \hline
+response & int &  '6' offerta non valida\\ \hline
+\end{tabular} \\

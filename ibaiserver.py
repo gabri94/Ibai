@@ -8,7 +8,7 @@ from client_manager import ClientManager
 
 
 
-class Ibai:
+class IbaiServer:
     """
     This class runs an auction server on the specified port
     The method listen loops waiting for new connections and each time a client
@@ -61,5 +61,8 @@ class Ibai:
             self.clients.append(cm)
             cm.start()
 
-e = Ibai('localhost', 7652)
-e.listen()
+if __name__ == "__main__":
+    e = IbaiServer('localhost', 7652)
+    e.listen()
+
+

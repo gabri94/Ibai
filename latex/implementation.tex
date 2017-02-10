@@ -1,2 +1,22 @@
 \section{Implementazione}
+Questo sisistema è stato implementato in Python 2.7, si divide in Client e Server, i quali sono composti da varie classi:
+\subsection{Server}
+Il server è stato implementato utilizzando più Thread. Il thread principale si occupa solamente di accettare le connessioni dagli utenti. Per ogni connessione viene fatto partire un thread ''ClientManager'' che si occupa della comunicazione con il client.
+\subsubsection{IbaiServer}
+Questa è la classe principale del Server. Ci sono le funzioni di inizializzazione del server e del database.
+Contiene anche il loop principale all'interno del quale accetta le connessioni dai client e le passa alla classe ClientManager.
+\subsubsection{ClientManager}
+Questa è la classe che esegue la maggior parte delle operazioni relative ai client. Eredita la classe thread e definisce un metodo ''run'' che viene  eseguito all'avvio del thread.\\
+Questo metodo è un loop di iterazione che riceve i comandi dal client. Una ricevuto un comando viene passato alla funzione “read\_command” che lo interpreta e esegue la funzione appropriata. Le altre funzioni sono funzioni specifiche per ogni comando definito nel protocollo: sell, buy, bid, etc.
+
+\paragraph{Sincronizzazione}
+I vari thread del server accedono in maniera concorrente alla memoria condivisa del thread principale. Qui sono memorizzati gli utenti, le aste e le categorie. Per evitare problemi di accessi contemporanei alla memoria, tutte le funzioni che vi accedono sono decorate con una funzione detta ``Synchronizer'' che impedisce a due thread di eseguire un operazione sulla memoria contemporaneamente.
+
+\subsubsection{model}
+\paragraph{Auction}
+\paragraph{Category}
+\paragraph{User}
+\paragraph{Exceptions}
+\subsection{Client}
+\subsubsection{IbaiClient}
 \subsection{Librerie utilizzate}
