@@ -46,16 +46,16 @@ class ClientManager(threading.Thread):
         self._auct = auct
         self.logged = False
         self.user = None
+        self.go = True
 
     def run(self):
         """Main loop of the Thread, here listens for the client msgs
         :return: return when the connnection closes
         """
-        self.go = True
         while(self.go):
             try:
                 msg = self._cs.recv(1024)
-            except socket.error, se:
+            except socket.error:
                 return
             if msg == "":
                 self.go = False

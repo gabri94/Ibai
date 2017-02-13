@@ -1,4 +1,4 @@
-from ibai_exceptions import AuctionException, UserException
+from ibai_exceptions import AuctionException, UserException, PriceException, BidException
 
 
 class Auction:
@@ -13,7 +13,7 @@ class Auction:
         if len(name) < 1:
             raise AuctionException("Invalid Name")
         if price <= 0:
-            raise Exception("Invalid price value")
+            raise PriceException("Invalid price value")
         self.owner = owner
         self.name = name
         self.users = []
@@ -35,7 +35,7 @@ class Auction:
         if self.closed:
             raise AuctionException("Closed Auction")
         if price < self.bids[0]["price"]:
-            raise AuctionException("Invalid bid")
+            raise BidException("Invalid bid")
         if self.bids[0]["user"] == user:
             raise UserException("Multiple bid")
         bid = {
