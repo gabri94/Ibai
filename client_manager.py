@@ -150,7 +150,7 @@ class ClientManager(threading.Thread):
         :param user: username
         :param pwd: MD5 hash of the password
         """
-        username = user.lower()
+        username = user
         try:
             self.user = self._auct._users[username]
             if self.user.password == pwd:
@@ -170,7 +170,7 @@ class ClientManager(threading.Thread):
         if not cat_name:
             self.response(0, res_msg="Invalid category name")
             return
-        cat_name = cat_name.lower()
+        cat_name = cat_name
         try:
             c = self._auct._categories[cat_name]
             raise Exception("Categoria gia' esistente")
@@ -258,8 +258,14 @@ class ClientManager(threading.Thread):
             debug_print(e)
             self.response(0)
         except AuctionException, e:
-            # No Winner or no auction #TODO fix
+            # No Winner
             self.response(6)
+        except ExistingAuctionException, e:
+            #No auctio
+            self.response(5)
+        except UserException, e:
+            #User not allowed to close
+            self.response(4)
 
     def response(self, response, res_msg="", token={}):
         """Compose a generic response

@@ -12,7 +12,7 @@ class Ibai:
     """
     This class runs an auction server on the specified port
     The method listen loops waiting for new connections and each time a client
-    connects a new ClientManager istance is created to handle it.
+    connects a new ClientManager is instanced to handle it.
     """
     def __init__(self, hostname, port):
         """Initalize the IbaiServer
@@ -39,17 +39,19 @@ class Ibai:
     def seed_categories(self):
         """Seed the  database with some products and categories"""
         cat_l = Category("libri")
-        a = Auction("Il Signore degli anelli", 10, "pippo")
-        b = Auction("La Metamorfosi", 7, "pippo")
+        pippo = self._users['pippo']
+        a = Auction("Il Signore degli anelli", 10, pippo)
+        b = Auction("La Metamorfosi", 7, pippo)
         cat_l.add_auction(a)
         cat_l.add_auction(b)
         self._categories['libri'] = cat_l
         cat_v = Category("vestiti")
-        c = Auction("Smoking nero usato", 500, "pippo")
-        d = Auction("Scarpe in pelle", 70, "pippo")
+        c = Auction("Smoking nero usato", 500, pippo)
+        d = Auction("Scarpe in pelle", 70, pippo)
         cat_v.add_auction(c)
         cat_v.add_auction(d)
         self._categories['vestiti'] = cat_v
+
 
     def listen(self):
         """Listen for the client connection and it to client_manager"""
