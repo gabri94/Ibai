@@ -1,5 +1,5 @@
 from ibai_exceptions import AuctionException, UserException, PriceException, BidException
-
+from utils import debug_print
 
 class Auction:
     def __init__(self, name, price, owner):
@@ -9,7 +9,6 @@ class Auction:
         :param owner: owner User object
         """
         price = float(price)
-        name = name.lower()
         if len(name) < 1:
             raise AuctionException("Invalid Name")
         if price <= 0:
@@ -31,6 +30,7 @@ class Auction:
         :param price: value of the bid
         :param user: user making the bid
         """
+        print price
         price = float(price)
         if self.closed:
             raise AuctionException("Closed Auction")
@@ -42,8 +42,15 @@ class Auction:
             "price": price,
             "user": user
         }
+        if self.winner()!=self.owner:
+            self.winner().notify(3, "La tua offerta e' stata superata")
         self.bids.insert(0, bid)
-        self.users.append(user)
+        debug_print(self.name)
+        debug_print(self.bids)
+        debug_print(self.users)
+        if user not in self.users:
+            self.users.append(user)
+
 
     def unbid(self, user):
         """ Remove our bid only if it's the highest
@@ -72,6 +79,7 @@ class Auction:
         if self.owner != user:
             raise UserException("User not allowed")
         self.closed = True
+        print "Chiuso"
         self.__notify_all(1, "Asta chiusa")
         self.winner().notify(2, "Hai vinto")
 
@@ -81,5 +89,7 @@ class Auction:
         :param code: code of the notification
         :param msg: message of the notification
         """
+        print "Notifico tutti"
         for user in self.users:
+            print "Notifico: " + user.name
             user.notify(code, msg)

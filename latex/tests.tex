@@ -1,1 +1,101 @@
 \section{Tests}
+I test sono contenuti nel file tests.py
+Può essere eseguito con il comando ``nosetests'' oppure ``python tests.py''
+\subsection{Test sulle funzionalità}
+\paragraph{\textbf{Connessione}}:
+\begin{lstlisting}[language=python]
+def test0_connection(self):
+\end{lstlisting}
+Questo test verifica che il server sia raggiungibile e accetti le connessioni.
+\paragraph{\textbf{Login}}:
+\begin{lstlisting}[language=python]
+def test10_empty_login(self):
+\end{lstlisting}
+Questo test verifica che un login con user e password vuoti sia gestito correttamente dal server
+\begin{lstlisting}[language=python]
+def test11_login(self):
+\end{lstlisting}
+Questo test prova l'autenticazione con un utente e una password validi. Fallisce se il server ritorna un codice diverso da 1
+\paragraph{\textbf{Registrazione}}:
+\begin{lstlisting}[language=python]
+def test3_wrong_register(self):
+\end{lstlisting}
+Questo test esegue prova a registrare una categoria merceologica già presente(``libri''). Da esito positivo se il server ritorna il codice 0
+
+\begin{lstlisting}[language=python]
+def test4_wrong_register2(self):
+\end{lstlisting}
+Questo test esegue prova a registrare una categoria vuota (``''). Da esito positivo se il server ritorna il codice 0
+
+\begin{lstlisting}[language=python]
+def test5_register(self):
+\end{lstlisting}
+Questo test registra una categoria merceologica non presente nel sistema (``elettrodomestici''). Ha successo se il server ritorna il codice 1
+
+\begin{lstlisting}[language=python]
+def test92_register_unlogged(self):
+\end{lstlisting}
+Questo test prova a registrare una categoria merceologica senza autenticazione. Ha successo se il server ritorna 3.
+
+\paragraph{\textbf{Vendita}}:
+\begin{lstlisting}[language=python]
+def test6_sell(self):
+\end{lstlisting}
+Questo test inserisce un prodotto in vendita, si aspetta una risposta dal server uguale a 1.
+
+\begin{lstlisting}[language=python]
+def test7_wrong_sell(self):
+\end{lstlisting}
+Questo test inserisce un prodotto in vendita vuoto (``''). Si attete una risposta dal server uguale a 0.
+
+\paragraph{\textbf{Offerta}}:
+
+\begin{lstlisting}[language=python]
+def test8_sell_bid(self):
+\end{lstlisting}
+Questo test inserisce un nuovo prodotto in vendita e prova a fare un offerta. Il risultato atteso è un fallimento in quanto non è possibile, da specifica, fare un offerta per il proprio prodotto. Risultato atteso 5
+
+\begin{lstlisting}[language=python]
+def test9_sell_wrongbid(self):
+\end{lstlisting}
+Questo test prova a inserire un offerta per un prodotto non esisteente. Il risultato atteso è 5.
+
+\begin{lstlisting}[language=python]
+def test93_close_auction_nowinner(self):
+\end{lstlisting}
+Questo test inserisce un prodotto e chiude l'asta. Il risultato atteso è 8, perchè non c'è nessun vincitore.
+
+
+\begin{lstlisting}[language=python]
+def test94_fail_close_auction(self):
+\end{lstlisting}
+Questo test effettua un offerta su un oggetto inserito da un'altro utente, dopodichè prova a chiudere l'asta.
+Il risultato atteso è 7 in quanto l'utente non è autorizzato a chiudere l'asta
+
+
+\subsection{Test sulle notifiche}
+Quest verificano la funzionalità delle notifiche asincrone.
+
+\begin{lstlisting}[language=python]
+def test2_notify(self):
+\end{lstlisting}
+Quest test verfica che il server risponda correttamente quando si registra l'endpoint di notifica.
+
+\begin{lstlisting}[language=python]
+def test991_notif_win(self):
+\end{lstlisting}
+Questo test effettua la connessione e l'autenticazione con due utenti. Il primo utente crea un prodotto dopodichè il secondo utente effettua un offerta per il prodotto e il primo utente chiude l'asta.
+
+Il test verifica che  il secondo utente riceva la notifica con il codice corrispondente alla vincita dell'asta.
+\begin{lstlisting}[language=python]
+def test992_notif_close_auct(self):
+\end{lstlisting}
+Questo test esegue la stessa procedura del test precedente,  ma verifica che il secondo client riceva il codice corrispondente alla chiusura dell'asta.
+
+
+\begin{lstlisting}[language=python]
+def test993_notif_manybids(self):
+\end{lstlisting}
+Questo test simula un'asta completa.
+1 utente crea l'asta e altri 2 utenti effettuano varie offerte.
+Il test fallisce se ogni utente riceve i messaggi di notifica corrispondenti al superamento della propria offerta da parte di un'altro utente.

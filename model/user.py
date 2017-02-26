@@ -12,8 +12,13 @@ class User:
         self.name = name
         self.password = pwd
         self.date = date
-        self.hostname = ""
-        self.port = 0
+        self.remote_host = ""
+        self.remote_port = 0
+
+    def __repr__(self):
+        return self.name
+    def __str__(self):
+        return self.__repr__()
 
     def update_notif_socket(self, hostname, port):
         """Update the client remote host for the notifications
@@ -29,6 +34,8 @@ class User:
         :param code: notification code
         :param msg: notification message
         """
+        if not self.remote_port:
+            return
         self.notif_sock = socket.socket()
         self.notif_sock.connect((self.remote_host, self.remote_port))
         payload = {

@@ -1,22 +1,82 @@
 \section{Implementazione}
 Questo sisistema è stato implementato in Python 2.7, si divide in Client e Server, i quali sono composti da varie classi:
 \subsection{Server}
-Il server è stato implementato utilizzando più Thread. Il thread principale si occupa solamente di accettare le connessioni dagli utenti. Per ogni connessione viene fatto partire un thread ''ClientManager'' che si occupa della comunicazione con il client.
+Il server è stato implementato utilizzando più Thread. Il thread principale si occupa solamente di accettare le connessioni dagli utenti e smistarle. Per ogni connessione viene fatto partire un thread ''ClientManager'' che si occupa della comunicazione con il client.\\
+E' stata scelta la porta 7652 per la comunicazione tra client e server. Per le notifiche la porta viene scelta casualmente dal sistema operativo.
 \subsubsection{IbaiServer}
-Questa è la classe principale del Server. Ci sono le funzioni di inizializzazione del server e del database.
-Contiene anche il loop principale all'interno del quale accetta le connessioni dai client e le passa alla classe ClientManager.
+Questa è la classe principale del Server. Contiene le funzioni di inizializzazione del server e del database.
+Contiene il loop principale all'interno del quale accetta le connessioni dai client e le passa alla classe ClientManager.
+\ref{sssec:lc} \ref{sssec:rc} \ref{sssec:rp}  \ref{sssec:lp} 
 \subsubsection{ClientManager}
-Questa è la classe che esegue la maggior parte delle operazioni relative ai client. Eredita la classe thread e definisce un metodo ''run'' che viene  eseguito all'avvio del thread.\\
-Questo metodo è un loop di iterazione che riceve i comandi dal client. Una ricevuto un comando viene passato alla funzione “read\_command” che lo interpreta e esegue la funzione appropriata. Le altre funzioni sono funzioni specifiche per ogni comando definito nel protocollo: sell, buy, bid, etc.
-
-\paragraph{Sincronizzazione}
-I vari thread del server accedono in maniera concorrente alla memoria condivisa del thread principale. Qui sono memorizzati gli utenti, le aste e le categorie. Per evitare problemi di accessi contemporanei alla memoria, tutte le funzioni che vi accedono sono decorate con una funzione detta ``Synchronizer'' che impedisce a due thread di eseguire un operazione sulla memoria contemporaneamente.
+Questa classe esegue la maggior parte delle operazioni relative ai client. Eredita la classe thread e definisce un metodo ''run'' che viene  eseguito all'avvio del thread.\\
+Questo metodo è un loop di iterazione che riceve i comandi dal client. Una volta ricevuto un comando viene passato alla funzione “read\_command” che lo interpreta ed esegue la funzione appropriata. Le altre funzioni sono funzioni specifiche per ogni comando definito nel protocollo: sell, buy, bid, etc.\\
+Sono stati implementati tutti i comandi definiti nel protocollo eccetto i comandi definiti nelle sezioni: 
+\paragraph{\textbf{Sincronizzazione}}
+I vari threads del server accedono contemporaneamente alla memoria condivisa del thread principale. Qui sono memorizzati gli utenti, le aste e le categorie. Per evitare problemi di accessi concorrenti alla memoria, tutte le funzioni che vi accedono sono decorate con una funzione detta ``Synchronizer'' che impedisce a due thread di eseguire un accesso contemporaneamente. Il blocco è effettuato per mezzo di un lock.
 
 \subsubsection{model}
-\paragraph{Auction}
-\paragraph{Category}
-\paragraph{User}
+Modelli delle strutture dati utilizzate:
+\paragraph{\textbf{Auction}}
+Questa classe rappresenta un asta. Gli attributi di questo oggetto sono:
+\begin{itemize}
+\item{name}: Nome dell'oggetto in vendita (Case sensitive)
+\item{price}: Prezzo di base dell'asta
+\item{owner}: Utente che ha messo in vendita l'oggetto
+\item{users}: Lista di utenti che hanno partecipato all'asta
+\item{bids}: Lista di offerte con i relativi utenti
+\end{itemize}
+I metodi della classe sono:
+\begin{itemize}
+\item {bid(self, price, user)}: Inserisce un offerta dell'utente "user" e con prezzo "price"
+\item {unbid(self, user)}: Rimuove l'ultima offerta dell'utente "user"
+\item {winner(self)}: Ritorna l'utente che ha fatto l'ultima offerta più alta
+\item {close(self, user)}: Se user corrisponde all'attributo "owner", chiude l'asta e notifica il vincitore.
+\item {\_\_notify\_all(self, code, msg)}: Notifica tutti gli utenti iscritti all'asta con un messaggio
+\end{itemize}
+\paragraph{\textbf{Category}}
+Questa classe rappresenta una categoria. I suoi attributi sono: 
+\begin{itemize}
+\item{name}: Nome della categoria merceologica
+\item{auctions}: Lista di aste oggetti facenti parte della categoria
+\end{itemize}
+I suoi metodi sono:
+\begin{itemize}
+\item{add\_auction(self, auction)}: Aggiunge un oggetto alla categoria
+\item{del\_auction(self, auction)}: Rimuove un oggetto dalla categoria
+\item{search\_auction(self, name)}: Cerca un oggetto per nome nella categoria
+\end{itemize}
+\paragraph{\textbf{User}}
+Questa classe rappresenta un utente, i suoi attributi sono:
+\begin{itemize}
+\item{name}: Nome utente
+\item{password}: Hash MD5 della password dell'utente
+\item{date}: Data di nascita dell'utente
+\item{remote\_port}: Porta remota per l'invio delle notifiche
+\item{remote\_host}: Host remoto per l'invio delle notifiche
+\end{itemize}
+I suoi metodi sono:
+\begin{itemize}
+\item{update\_notif\_socket(self, host, port)}: Aggiorna l'hostname e la porta dell'endpoint remoto per l'invio delle notifiche
+\item{notify(self, code, msg)}: Notifica l'utente con un messaggio e un codice di notifica
+\end{itemize}
 \paragraph{Exceptions}
+Qua sono definite tutte le eccezioni personalizzate usate nel programma.
 \subsection{Client}
 \subsubsection{IbaiClient}
+Questa classe definisce un interfaccia client per collegarsi al server ed eseguire i comandi. E' stata implementata per semplificare lo svolgimento dei test.
+Si divide in due parti:\\
+La parte principale contiene tutti i metodi per interfacciarsi al server (register, sell, buy, unbuy, etc.) e i relativi metodi per interpretare la risposta del server.\\
+La seconda parte invece è un thread che  sta in ascolto e riceve le notifiche. Quando viene chiamata la funzione "listen\_notify" dal thread principale, viene creato un secondo thread (questo), che sta in ascolto fino a che non termina il programma.
 \subsection{Librerie utilizzate}
+Per scrivere il programma sono state utilizzate alcune librerie di terze parti. Tutte sono presenti nel set di librerie standard di python:
+\begin{itemize}
+\item{\textbf{json}}: Questa libreria viene utilizzata per serializzare e de-serializzare i messaggi in formato json inviati sulla socket.
+\item{\textbf{hmac}}: Questa liberia viene utilizzate per generare la firma presente nel token di autenticazione
+\item{\textbf{socket}}: Questa libreria gestisce la comunicazione di rete
+\item{\textbf{threading}}: Questa libreria gestisce i thread paralleli, sia lato server (gestione contemporanea di più client) che lato client(gestione delle notifiche asincrone)
+\item{\textbf{time}}: Questa liberia viene usata per controllare la scadenza dei token di autenticazione
+\item{\textbf{Queue}}: Questa libreria viene usata per la comunicazione tra i thread (lato client). In particolare è usata per memorizzare i messaggi di notifica non ancora processati.
+\item{\textbf{haslib}}: Questa libreria viene utilizzata per generare l'hash MD5 della password utente
+\item{\textbf{random}}: Questa libreria viene utilizzata per generare la chiave privata del server.
+\item{\textbf{unittest}}: Questa libreria viene utilizzata per il testing dell'applicazione
+\end{itemize}

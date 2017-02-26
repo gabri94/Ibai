@@ -35,6 +35,8 @@ class IbaiServer:
         self._users['gabriel'] = User("gabriel", pwd, "13-12-1994")
         pwd = hashlib.md5("gabrigabri").hexdigest()
         self._users['pippo'] = User("pippo", pwd, "13-12-1294")
+        pwd = hashlib.md5("prova123prova").hexdigest()
+        self._users['prova'] = User("prova", pwd, "13-12-1224")
 
     def seed_categories(self):
         """Seed the  database with some products and categories"""

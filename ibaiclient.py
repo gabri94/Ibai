@@ -33,16 +33,19 @@ class IbaiClient:
                     json_d = json.loads(l)
                     if json_d['msg_id'] == 22:  # Notify
                         self.notifications.put(json_d)
+                        if(self._print_notif):
+                            print "Notifica: " + json_d['text']
                 clientsocket.close()
         self._serverSocket.close()
         return
 
-    def listen_notify(self):
+    def listen_notify(self, print_not=False):
         """Starts the notification worker and listens for notifications
         """
         self._nthread = threading.Thread(target=self.notify_worker)
         self._nthread.daemon = True
         self._nthread.start()
+        self._print_notif = print_not
 
     def connect(self, address, port):
         """Connect to the server
@@ -57,6 +60,7 @@ class IbaiClient:
     def disconnect(self):
         """ Disconnect the server"""
         self.sock.close()
+        self.notify_run = False
         self._serverSocket.close()
         return True
 
@@ -77,7 +81,11 @@ class IbaiClient:
         json_resp = json.loads(resp[0])
         if json_resp['msg_id'] == -1:
             if opcode == 11:
-                self._token = json_resp['token']
+                try:
+                    self._token = json_resp['token']
+                except KeyError:
+                    return False
+
             return json_resp['response']
         else:
             raise Exception("Not a Response")
@@ -89,7 +97,6 @@ class IbaiClient:
         :return: result of the operation
         """
         pwd = hashlib.md5(password).hexdigest()
-        user = user.lower()
         data = {
             'msg_id': 11,
             'user': user,
@@ -186,12 +193,14 @@ class IbaiClient:
             'port': self._notify_port
         }
         self.send(data)
+        self.eval_res(data['msg_id'])
+        return self.get_notify()
+
+    def get_notify(self):
         try:
             response = self.notifications.get(timeout=2)
-            print "Notifica: "+ response['text']
+            if response['msg_id'] == 22:
+                return response
         except Queue.Empty:
-            return False
-        if response['msg_id'] == 22:
-            if response['code'] == 1:
-                return True
+            print "Notifica non ricevuta"
         return False

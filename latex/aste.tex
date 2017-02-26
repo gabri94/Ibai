@@ -112,10 +112,16 @@
 \begin{document}
 \maketitle
 \section*{Introduzione}
-\tableofcontents
+Per il corso di Reti di Calcolatori dell'anno 2016-2017 è stato richiesto di definire un protocollo per un applicazione client server di un sistema di aste e di implementarlo in un linguaggio a scelta tra Python o Java. Il protocollo doveva rispettare una serie di specifiche lasciando libertà allo studente sulle scelte implementative.\\
+Per garantire la scalabilità del sistema è  stato definito un protocollo stateless, i cui messaggi sono basati sul formato JSON.
+Le specifiche del protocollo sono visibili nella sezione \ref{proto}. \\
+Dato che in un sistema di aste le connessioni simultanee e in tempo reale di più client sono un fattore importante, è stato implementato un server multithread. Per evitare problemi di accessi concorrenti, tutte le operazioni sulla memoria sono state bloccate con un ``lock''. 
+Tra le specifiche del progetto era presente una funzionalità di notifiche. Questa è stata
+I particolari sull'implementazione sono disponibili nella sezione \ref{implem}\\
+\tableofcontents 
 \newpage
-\input{protocol}
-\input{implementation}
+\input{protocol} \label{proto}
+\input{implementation} \label{implem}
 \input{tests}
 
 \end{document}

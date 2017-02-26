@@ -15,7 +15,14 @@ class TestIbai(unittest.TestCase):
         self._c.disconnect()
         self.assertTrue(res)
 
-    def test1_login(self):
+    def test10_empty_login(self):
+        print "Test Login"
+        self._c.connect("127.0.0.1", self.serverport)
+        res = self._c.login("", "")
+        self._c.disconnect()
+        self.assertEqual(res, 0)
+
+    def test11_login(self):
         print "Test Login"
         self._c.connect("127.0.0.1", self.serverport)
         res = self._c.login("gabriel", "pippopippo")
@@ -77,7 +84,7 @@ class TestIbai(unittest.TestCase):
         self._c.login("gabriel", "pippopippo")
         self._c.sell("libri", "PromessiSposi", 10)
         res = self._c.bid("libri", "PromessiSposi", 23)
-        #can't bid for my auction
+        # can't bid for my auction
         self._c.disconnect()
         self.assertEqual(res, 5)
 
@@ -96,17 +103,107 @@ class TestIbai(unittest.TestCase):
         self._c.disconnect()
         self.assertEqual(res, 3)
 
-    def test93_close_auction(self):
+    def test93_close_auction_nowinner(self):
         print "Test Close auction"
         self._c.connect("127.0.0.1", self.serverport)
         self._c.login("gabriel", "pippopippo")
-        self._c.listen_notify()
-        self._c.notify_me()
         self._c.sell("libri", "IlPrincipe", 10.5)
         res = self._c.close("libri", "IlPrincipe")
-        self._c.notify_me()
         self._c.disconnect()
+        self.assertEqual(res, 8)
+
+    def test94_fail_close_auction(self):
+        print "Test Failing Close auction"
+        self._c.connect("127.0.0.1", self.serverport)
+        self._c.login("gabriel", "pippopippo")
+        self._c.bid("libri", "Il Signore degli anelli", 12.5)
+        res = self._c.close("libri", "Il Signore degli anelli")
+        self._c.disconnect()
+        self.assertEqual(res, 7)
+
+    def test991_notif_win(self):
+        print "Test Winning Notification"
+        c1 = IbaiClient()
+        c1.connect("127.0.0.1", 7652)
+        c1.login("gabriel", "pippopippo")
+        c1.listen_notify(True)
+        c1.notify_me()
+        c2 = IbaiClient()
+        c2.connect("127.0.0.1", 7652)
+        c2.login("pippo", "gabrigabri")
+        c2.listen_notify(True)
+        c2.notify_me()
+
+        c1.sell("libri", "IlPrincipe", 10.5)
+        c2.bid("libri", "IlPrincipe", 23)
+        c1.close("libri", "IlPrincipe")
+
+        c1.get_notify()
+        c2.get_notify()
+        #c1.get_notify()
+        res = c2.get_notify()['code']
+
+        c1.disconnect()
+        c2.disconnect()
+        self.assertEqual(res, 2)
+
+    def test992_notif_close_auct(self):
+        print "Test Notification when price gets surpassed"
+        c1 = IbaiClient()
+        c1.connect("127.0.0.1", 7652)
+        c1.login("gabriel", "pippopippo")
+        c1.listen_notify(True)
+        c1.notify_me()
+        c2 = IbaiClient()
+        c2.connect("127.0.0.1", 7652)
+        c2.login("pippo", "gabrigabri")
+        c2.listen_notify(True)
+        c2.notify_me()
+
+        c1.sell("libri", "IlPrincipino", 10.5)
+        c2.bid("libri", "IlPrincipino", 23)
+        c1.close("libri", "IlPrincipino")
+
+        res = c2.get_notify()['code']
+
+        c1.disconnect()
+        c2.disconnect()
+
         self.assertEqual(res, 1)
+
+    def test993_notif_manybids(self):
+        print "Test Notification when price gets surpassed"
+        c1 = IbaiClient()
+        c1.connect("127.0.0.1", 7652)
+        c1.login("gabriel", "pippopippo")
+        c1.listen_notify()
+        c1.notify_me()
+        c2 = IbaiClient()
+        c2.connect("127.0.0.1", 7652)
+        c2.login("prova", "prova123prova")
+        c2.listen_notify()
+        c2.notify_me()
+        c3 = IbaiClient()
+        c3.connect("127.0.0.1", 7652)
+        c3.login("pippo", "gabrigabri")
+        c3.listen_notify(print_not=True)
+        c3.notify_me()
+
+        c1.sell("libri", "IlGattoConGliStivali", 13.75)
+        c2.bid("libri", "IlGattoConGliStivali", 23)
+        c3.bid("libri", "IlGattoConGliStivali", 26)
+        self.failUnlessEqual(c2.get_notify()['code'], 3)
+        c2.bid("libri", "IlGattoConGliStivali", 28)
+        self.failUnlessEqual(c3.get_notify()['code'], 3)
+        c3.bid("libri", "IlGattoConGliStivali", 30)
+        self.failUnlessEqual(c2.get_notify()['code'], 3)
+
+        c1.close("libri", "IlGattoConGliStivali")
+
+        self.assertEqual(c1.get_notify()['code'], 1)
+        c1.disconnect()
+        c2.disconnect()
+        c3.disconnect()
 
 
 if __name__ == '__main__':

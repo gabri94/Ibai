@@ -1,6 +1,4 @@
 \section{Protocollo}
-Per sviluppare questo progetto era necessario definire un protocollo per la comunicazione client-server.
-Per garantire  la scalabilità del sistema è stato scelto un protocollo stateless, nonchè connectionless.\\
 E' stato utlizzato JSON come formato per lo scambio di dati in quanto erano disponibili nella libreria standard python i metodi per serializzare e deserializzare gli oggetti.\\
 
 Il formato di un generico  messaggio è:
@@ -47,7 +45,7 @@ La prima cifra del campo msg\_id indica il tipo di richiesta, la seconda indica 
 \subsection{Messaggio di risposta}
 Il formato di un generico messaggio di risposta è il seguente.\\
 Se non è esplicitamente indicato un'altro formato per la risposta,
- allora la risposta sarà di questo formato.
+ allora la risposta rispetterà quest'ultimo.
 \begin{lstlisting}[language=json]
 {
   "msg_id": -1
@@ -67,14 +65,15 @@ response & int & '1' in caso di successo  \\
 Questo messaggio può essere esteso dalle varie funzioni aggiungendo campi e codici di risposta.\\
 
 \subsection{Autenticazione}
-La prima cosa che deve fare un client quando si connette al server è autenticarsi utilizzando un username ed una password.
-Il server mantiene una lista di utenti con relative password, quando il client prova ad autenticarsi vengono confrontati e se sono corretti l'autenticazione è avvenuta.
-Per evitare che nel server vengano memorizzate le password in chiaro, è stato scelto di memorizzare e trasmettere l'hash md5 della password.
-Il Client si occuperà di eseguire l'hash md5 della password inserita dall'utente e di inviarlo al server, che lo confronterà con quello memorizzato.\\
+Il primo scambio di messaggi tra client e server è necessariamente di  autenticazione. Viene effettuato utilizzando un username ed una password.
+Il server mantiene una lista di utenti con relative password, quando il client effettua l'autenticazione vengono confrontati e nel caso corrispondano l'autenticazione è avvenuta.
+Per evitare di memorizzare le password in chiaro, è stato scelto di memorizzare e trasmettere l'hash md5 della password.
+Il Client invia al server l'hash md5 della password inserita dall'utente, che lo confronta con quello memorizzato.
 
 \subsubsection{Sessioni}
-Per gestire le sessioni  mantenendo un procollo stateless è stato scelto di generare un token ed inviarlo al client.
-Una volta effettuato il login il server restituirà un token al client che verrà utilizzato per autenticare tutti i comandi.\\
+Al fine di gestire le sessioni  mantenendo un procollo stateless è stato scelto di generare un token di autenticazione ed inviarlo al client.
+Una volta effettuato il login il server invia il token al client, questo lo utilizza per autenticare tutti i successivi comandi.\\
+Al termine della scadenza il token perde di validità ed è necessario autenticarsi nuovamente.
 Il token inviato al client è della forma:
 \begin{lstlisting}[language=json]
 {
@@ -93,7 +92,7 @@ signature & stringa & Codice di verifica del messaggio\\ \hline
 \end{tabular}\\
 
 Il campo signature è un hash dei precedenti due campi (username e expiration) più una chiave segreta generata dal server.
-In questa maniera il server potrà verificare che il token sia autentico senza doverne mantenere una copia in memoria.
+In questa maniera il server può verificare che il token sia autentico senza doverne mantenere una copia in memoria.
 \subsubsection{Formato}
 Il messaggio di autenticazione è del formato:
 \begin{lstlisting}[language=json]
@@ -129,9 +128,9 @@ token & json & token per la sessione \\ \hline
 \end{tabular} \\
 \subsection{Gestione delle Notifiche}
 Il server di aste può inviare delle notifiche asincrone ai client per comunicare aggiornamenti di stato.
-Per esempio il client riceverà una notifica quando un'asta viene terminata o la sua offerta viene superata.\\
+Per esempio il client riceve una notifica quando un'asta viene terminata ed ogni volta che sua offerta viene superata.\\
 \subsubsection{Registrazione}
-Per ricevere delle notifiche asincrone il client dovrà stare in ascolto su una determinata porta, e dovrà comunicare il proprio indirizzo e la porta al server. Per fare questo è disponibile un comando. Di seguito il formato:\\
+Per ricevere delle notifiche asincrone il client  rimane in ascolto su una determinata porta, questa viene  comunicata insieme al proprio indirizzo  al server. Per fare questo è disponibile un comando. Di seguito il formato:\\
 \begin{lstlisting}[language=json]
 {
   "token": <token>,
@@ -160,20 +159,22 @@ Un messaggio di notiica, inviato dal server al client, rispetta il formato:
 \begin{tabular}{|l | l | l |}
 \hline
 Campo & Tipo & Descrizione \\ \hline
-code & int & codice di notifica \\
+code & int & codice di notifica: \\
 & & -1 Notifiche OK \\
 & & 1 Asta chiusa\\
-& & 2 Hai vinto\\ \hline
+& & 2 Hai vinto\\
+& & 3 Offerta superata\\ \hline
+
 text & string & Messaggio di notifica \\ \hline
 \end{tabular} \\
 
 
 \subsection{Categorie}
-I prodotti in vendita nel sistema di aste sono suddivisi per categorie merceologiche. E' possibile effettuare varie operazioni sulle cateogorie:
+I prodotti in vendita nel sistema di aste sono suddivisi per categorie merceologiche. E' possibile effettuare varie operazioni sulle categorie:
 Ogni categoria è identificata in maniera univoca dal suo nome.
 \subsubsection{Registrazione categoria}
 Attraverso il seguente comando è possibile aggiungere una nuova categoria\\
-Il nome della categoria sarà utilizzato per identificarla.
+Il nome della categoria è utilizzato per identificarla.
 
 \begin{lstlisting}[language=json]
 {
@@ -188,7 +189,7 @@ Il nome della categoria sarà utilizzato per identificarla.
 Campo & Tipo & Descrizione \\ \hline
 category & string & Nome della categoria, univoco.\\ \hline
 \end{tabular} \\
-\subsubsection{Lista delle categorie}
+\subsubsection{Lista delle categorie} \label{sssec:lc}
 Attraverso il seguente comando è possibile ottenere una lista delle categorie
 \begin{lstlisting}[language=json]
 {
@@ -209,7 +210,7 @@ Il formato della risposta è:
   ]
 }
 \end{lstlisting}
-\subsubsection{Ricerca di una categoria}
+\subsubsection{Ricerca di una categoria} \label{sssec:rc}
 Attraverso il seguente comando è possibile ricercare tra le categorie per nome
 \begin{lstlisting}[language=json]
 {
@@ -248,7 +249,7 @@ product & string & nome del prodotto (univoco per categoria).\\ \hline
 price & float & prezzo di partenza dell'asta.\\ \hline
 \end{tabular} \\
 
-\subsubsection{Ricerca di un prodotto}
+\subsubsection{Ricerca di un prodotto} \label{sssec:rp}
 Attraverso questo comando è possibile ricercare un prodotto all'interno di una categoria.
 \begin{lstlisting}[language=json]
 {
@@ -265,7 +266,7 @@ Campo & Tipo & Descrizione \\ \hline
 category & string & Categoria alla quale appartiene il prodotto. \\ \hline
 product & strin & Espressione da ricercare come nome del prodotto.\\ \hline
 \end{tabular} \\
-\subsubsection{Lista tutti i prodotti}
+\subsubsection{Lista tutti i prodotti} \label{sssec:lp}
 \begin{lstlisting}[language=json]
 {
   "token": <token>,
@@ -294,11 +295,11 @@ L'asta termina quando si raggiunge il tempo limite, o quando il venditore decide
 E' anche possibile ritirare un offerta, ma solo nel caso sia l'offerta più alta.
 \subsubsection{Offerta}
 L'utente può effettuare un offerta per un prodotto già inserito.\\
-L'offerta sarà valida solamente se non è doppia (l'offerta più alta al momento non è dell'utente) al fine di evitare che un utente possa far salire arbitrariamente il prezzo di un prodotto.\\
-Nel caso l'offerta sia inferiore all'ultima offerta registrata allora riceveremo un errore.
+Al fine di evitare che un utente possa far salire arbitrariamente il prezzo di un prodotto non è possibile inviare offerte successive da parte dello stesso utente..\\
+Nel caso l'offerta sia inferiore all'ultima offerta registrata allora sarà restituito un errore.
 \begin{lstlisting}[language=json]
 {
-  'token': s<token>,
+  'token': <token>,
   'msg_id': 51,
   'category': <category name>,
   'product': <product name>
@@ -317,7 +318,7 @@ price & float & valore dell'offerta \\ \hline
 E' possibile ritirare un offerta fatta ad un'asta, ma solo nel caso sia ancora l'offerta più alta.
 \begin{lstlisting}[language=json]
 {
-  'token': s<token>,
+  'token': <token>,
   'msg_id': 52,
   'category': <category name>,
   'product': <product name>
@@ -333,7 +334,7 @@ product & string & nome del prodotto \\ \hline
 \subsubsection{Chiusura di un'asta}
 \begin{lstlisting}[language=json]
 {
-  'token': s<token>,
+  'token': <token>,
   'msg_id': 53,
   'category': <category name>,
   'product': <product name>
@@ -353,4 +354,6 @@ Campo & Tipo & Descrizione \\ \hline
 response & int & '4' categoria non valida \\ \hline
 response & int & '5' asta non valida\\ \hline
 response & int &  '6' offerta non valida\\ \hline
+response & int &  '7' utente non autorizzato\\ \hline
+response & int &  '8' asta chiusa senza vincitori\\ \hline
 \end{tabular} \\

@@ -107,15 +107,12 @@ class ClientManager(threading.Thread):
         self.response(-1, "Comando non valido")
         return
 
-    # TODO: CHECK
     def check_session(self, session):
-        try:
-            if(not session['token']):
-                raise SessionException("Errore, sessione non esistente")
-            session = session['token']
-        except (KeyError, TypeError, SessionException) as e:
-            self.response(3, str(e))
+        if 'token' not in session.keys() or not session['token']:
+            self.response(3, "Errore, sessione invalida")
             return False
+        session = session['token']
+
         # check if the session is expired
         if(int(session['expire']) - time.time() < 0):
             self.response(2, "Errore, sessione scaduta")
@@ -153,15 +150,18 @@ class ClientManager(threading.Thread):
         username = user
         try:
             self.user = self._auct._users[username]
+            token = ""
             if self.user.password == pwd:
                 # Login effettuato
                 self.logged = True
                 self.response(1, token=self.gen_session())
+                return
+            debug_print("Password non valida")
+            self.response(0, "Password non valida", token="")
         except KeyError, e:
             error_print("Utente non trovato")
-            self.response(0, "Utente non trovato")
+            self.response(0, "Utente non trovato", token="")
 
-    # TODO: Da ricontrollare tutta la funzione
     @synchronized(myLock)
     def register(self, cat_name):
         """Register a new category
@@ -170,21 +170,15 @@ class ClientManager(threading.Thread):
         if not cat_name:
             self.response(0, res_msg="Invalid category name")
             return
-        cat_name = cat_name
+        if cat_name in self._auct._categories:
+            self.response(0, res_msg="Categoria gia' esistente")
+            return
         try:
-            c = self._auct._categories[cat_name]
-            raise Exception("Categoria gia' esistente")
-        except KeyError, e:
-            try:
-                self._auct._categories[cat_name] = Category(cat_name)
-            except Exception, e:
-                error_print(e)
-                self.response(0, "Categoria non esistente")
-            else:
-                self.response(1)
+            self._auct._categories[cat_name] = Category(cat_name)
         except Exception, e:
-            self.response(0)
-            error_print(e)
+            self.response(0, "Categoria non valida")
+        finally:
+            self.response(1)
 
     @synchronized(myLock)
     def sell(self, cat_name, prod_name, price):
@@ -193,9 +187,11 @@ class ClientManager(threading.Thread):
         :param prod_name: product name
         :param price: base price for the auction
         """
+        print "Selling: "
+        print price
         try:
             cat = Category.search_category(self._auct._categories, cat_name)
-            a = Auction(prod_name, int(price), self.user)
+            a = Auction(prod_name, price, self.user)
             cat.add_auction(a)
             self.response(1)
         except CategoryException, e:
@@ -248,24 +244,29 @@ class ClientManager(threading.Thread):
         :param cat_name: category name
         :param prod_name: product name
         """
+        print "Closing bid " + prod_name
         try:
             cat = Category.search_category(self._auct._categories, cat_name)
             auct = cat.search_auction(prod_name)
             auct.close(self.user)
+            cat.del_auction(auct)
             self.response(1)
         except CategoryException, e:
             # Not matching category
-            debug_print(e)
+            error_print(e)
             self.response(0)
         except AuctionException, e:
             # No Winner
-            self.response(6)
+            error_print(e)
+            self.response(8)
         except ExistingAuctionException, e:
-            #No auctio
+            #No auction
+            error_print(e)
             self.response(5)
         except UserException, e:
             #User not allowed to close
-            self.response(4)
+            error_print(e)
+            self.response(7)
 
     def response(self, response, res_msg="", token={}):
         """Compose a generic response
